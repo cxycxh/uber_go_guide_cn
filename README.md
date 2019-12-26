@@ -46,6 +46,20 @@ row before the </tbody></table> line.
 </tr>
 ~~~
 
+
+
+-->
+
+<!--
+change.md
+
+# 2019-12-17
+- 函数选项：推荐 “Option” 接口的结构实现
+- 而不是用闭包捕获值。
+
+# 2019-11-26
+- 添加针对全局变量变异的指导。
+
 -->
 
 # [uber-go/guide](https://github.com/uber-go/guide) 的中文翻译
@@ -54,11 +68,11 @@ row before the </tbody></table> line.
 
 # Uber Go 语言编码规范
 
- [Uber](https://www.uber.com/) 是一家美国硅谷的科技公司，也是 Go 语言的早期 adopter. 其开源了很多 golang 项目，诸如被 Gopher 圈熟知的 [zap](https://github.com/uber-go/zap)、[jaeger](https://github.com/jaegertracing/jaeger) 等。2018 年年末 Uber 将内部的 [Go 风格规范](https://github.com/uber-go/guide) 开源到 GitHub，经过一年的积累和更新，该规范已经初具规模，并受到广大 Gopher 的关注。本文是该规范的中文版本。本版本会根据原版实时更新。
+ [Uber](https://www.uber.com/) 是一家美国硅谷的科技公司，也是 Go 语言的早期 adopter。其开源了很多 golang 项目，诸如被 Gopher 圈熟知的 [zap](https://github.com/uber-go/zap)、[jaeger](https://github.com/jaegertracing/jaeger) 等。2018 年年末 Uber 将内部的 [Go 风格规范](https://github.com/uber-go/guide) 开源到 GitHub，经过一年的积累和更新，该规范已经初具规模，并受到广大 Gopher 的关注。本文是该规范的中文版本。本版本会根据原版实时更新。
  
  ## 版本
  
-  - 当前更新版本:2019-10-22 版本地址：[commit:#58](https://github.com/uber-go/guide/commit/5980baab7ebc59ba59eac21eaedced263a79729a)
+  - 当前更新版本：2019-12-18 版本地址：[commit:#77](https://github.com/uber-go/guide/commit/1f4b461e211e809fa2454f9d68f87ed62f3ea0cb)
   - 如果您发现任何更新、问题或改进，请随时 fork 和 PR
   - Please feel free to fork and PR if you find any updates, issues or improvement.
 
@@ -70,7 +84,7 @@ row before the </tbody></table> line.
   - [接收器 (receiver) 与接口](#接收器-receiver-与接口)
   - [零值 Mutex 是有效的](#零值-Mutex-是有效的)
   - [在边界处拷贝 Slices 和 Maps](#在边界处拷贝-Slices-和-Maps)
-  - [使用 defer 做清理](#使用-defer-做清理)
+  - [使用 defer 释放资源](#使用-defer-释放资源)
   - [Channel 的 size 要么是 1，要么是无缓冲的](#Channel-的-size-要么是-1要么是无缓冲的)
   - [枚举从 1 开始](#枚举从-1-开始)
   - [错误类型](#错误类型)
@@ -78,6 +92,7 @@ row before the </tbody></table> line.
   - [处理类型断言失败](#处理类型断言失败)
   - [不要 panic](#不要-panic)
   - [使用 go.uber.org/atomic](#使用-gouberorgatomic)
+  - [避免可变全局变量](#避免可变全局变量)
 - [性能](#性能)
   - [优先使用 strconv 而不是 fmt](#优先使用-strconv-而不是-fmt)
   - [避免字符串到字节的转换](#避免字符串到字节的转换)
@@ -85,7 +100,7 @@ row before the </tbody></table> line.
 - [规范](#规范)
   - [一致性](#一致性)
   - [相似的声明放在一组](#相似的声明放在一组)
-  - [import 组内的包导入顺序](#import-组内的包导入顺序)
+  - [import 分组](#import-分组)
   - [包名](#包名)
   - [函数名](#函数名)
   - [导入别名](#导入别名)
@@ -93,15 +108,16 @@ row before the </tbody></table> line.
   - [减少嵌套](#减少嵌套)
   - [不必要的 else](#不必要的-else)
   - [顶层变量声明](#顶层变量声明)
-  - [对于未导出的顶层常量和变量,使用_作为前缀](#对于未导出的顶层常量和变量使用_作为前缀)
+  - [对于未导出的顶层常量和变量，使用_作为前缀](#对于未导出的顶层常量和变量使用_作为前缀)
   - [结构体中的嵌入](#结构体中的嵌入)
   - [使用字段名初始化结构体](#使用字段名初始化结构体)
   - [本地变量声明](#本地变量声明)
   - [nil 是一个有效的 slice](#nil-是一个有效的-slice)
   - [小变量作用域](#小变量作用域)
   - [避免参数语义不明确（Avoid Naked Parameters）](#避免参数语义不明确Avoid-Naked-Parameters)
-  - [使用原始字符串字面值,避免转义](#使用原始字符串字面值避免转义)
+  - [使用原始字符串字面值，避免转义](#使用原始字符串字面值避免转义)
   - [初始化 Struct 引用](#初始化-Struct-引用)
+  - [初始化 Maps](#初始化-maps)
   - [字符串 string format ](#字符串-string-format )
   - [命名 Printf 样式的函数](#命名-Printf-样式的函数)
 - [编程模式](#编程模式)
@@ -140,7 +156,7 @@ row before the </tbody></table> line.
 
 接口实质上在底层用两个字段表示：
 
-1. 一个指向某些特定类型信息的指针。您可以将其视为"type."
+1. 一个指向某些特定类型信息的指针。您可以将其视为"type"。
 2. 数据指针。如果存储的数据是指针，则直接存储。如果存储的数据是一个值，则存储指向该值的指针。
 
 如果希望接口方法修改基础数据，则必须使用指针传递。
@@ -208,14 +224,11 @@ i = s2Ptr
 //   i = s2Val
 ```
 
-[Effective Go] 中有一段关于 [pointers vs. values] 的精彩讲解。
-
-  [Effective Go]:https://golang.org/doc/effective_go.html
-  [Pointers vs. Values]: https://golang.org/doc/effective_go.html#pointers_vs_values
+[Effective Go](https://golang.org/doc/effective_go.html) 中有一段关于 [pointers vs. values](https://golang.org/doc/effective_go.html#pointers_vs_values) 的精彩讲解。
 
 ### 零值 Mutex 是有效的
 
-sync.Mutex 和 sync.RWMutex 是有效的。因此你几乎不需要一个指向 mutex 的指针。
+零值 `sync.Mutex` 和 `sync.RWMutex` 是有效的。所以指向 mutex 的指针基本是不必要的。
 
 <table>
 <thead><tr><th>Bad</th><th>Good</th></tr></thead>
@@ -403,9 +416,9 @@ snapshot := stats.Snapshot()
 </td></tr>
 </tbody></table>
 
-### 使用 defer 做清理
+### 使用 defer 释放资源
 
-使用 defer 清理资源，诸如文件和锁。
+使用 defer 释放资源，诸如文件和锁。
 
 <table>
 <thead><tr><th>Bad</th><th>Good</th></tr></thead>
@@ -449,9 +462,9 @@ return p.count
 
 Defer 的开销非常小，只有在您可以证明函数执行时间处于纳秒级的程度时，才应避免这样做。使用 defer 提升可读性是值得的，因为使用它们的成本微不足道。尤其适用于那些不仅仅是简单内存访问的较大的方法，在这些方法中其他计算的资源消耗远超过 `defer`。
 
-### Channel 的 size 要么是 1,要么是无缓冲的
+### Channel 的 size 要么是 1，要么是无缓冲的
 
-channel 通常 size 应为 1 或是无缓冲的。默认情况下，channel 是无缓冲的，其 size 为零。任何其他尺寸都必须经过严格的审查。考虑如何确定大小，是什么阻止了 channel 在负载下被填满并阻止写入，以及发生这种情况时发生了什么。
+channel 通常 size 应为 1 或是无缓冲的。默认情况下，channel 是无缓冲的，其 size 为零。任何其他尺寸都必须经过严格的审查。我们需要考虑如何确定大小，考虑是什么阻止了 channel 在高负载下和阻塞写时的写入，以及当这种情况发生时系统逻辑有哪些变化。(翻译解释：按照原文意思是需要界定通道边界，竞态条件，以及逻辑上下文梳理)
 
 <table>
 <thead><tr><th>Bad</th><th>Good</th></tr></thead>
@@ -694,7 +707,9 @@ if err := foo.Open("foo"); err != nil {
 
 - 如果没有要添加的其他上下文，并且您想要维护原始错误类型，则返回原始错误。
 - 添加上下文，使用 [`"pkg/errors".Wrap`] 以便错误消息提供更多上下文 ,[`"pkg/errors".Cause`] 可用于提取原始错误。
-- 使用 [`fmt.Errorf`] ，如果调用者不需要检测或处理的特定错误情况。  specific error case.
+Use fmt.Errorf if the callers do not need to detect or handle that specific error case.
+
+- 如果调用者不需要检测或处理的特定错误情况，使用 [`fmt.Errorf`]。
 
 建议在可能的地方添加上下文，以使您获得诸如“调用服务 foo：连接被拒绝”之类的更有用的错误，而不是诸如“连接被拒绝”之类的模糊错误。
 
@@ -834,8 +849,7 @@ panic/recover 不是错误处理策略。仅当发生不可恢复的事情（例
 var _statusTemplate = template.Must(template.New("name").Parse("_statusHTML"))
 ```
 
-Even in tests, prefer `t.Fatal` or `t.FailNow` over panics to ensure that the
-test is marked as failed.
+即使在测试代码中，也优先使用`t.Fatal`或者`t.FailNow`而不是 panic 来确保失败被标记。
 
 <table>
 <thead><tr><th>Bad</th><th>Good</th></tr></thead>
@@ -869,7 +883,7 @@ if err != nil {
 
 ### 使用 go.uber.org/atomic
 
-使用 [sync/atomic] 包的原子操作对原始类型 (`int32`, `int64`等）进行操作，因此很容易忘记使用原子操作来读取或修改变量。
+使用 [sync/atomic] 包的原子操作对原始类型 (`int32`, `int64`等）进行操作，因为很容易忘记使用原子操作来读取或修改变量。
 
 [go.uber.org/atomic] 通过隐藏基础类型为这些操作增加了类型安全性。此外，它包括一个方便的`atomic.Bool`类型。
 
@@ -922,9 +936,76 @@ func (f *foo) isRunning() bool {
 </td></tr>
 </tbody></table>
 
+### 避免可变全局变量
+
+使用选择依赖注入方式避免改变全局变量。 
+既适用于函数指针又适用于其他值类型
+
+<table>
+<thead><tr><th>Bad</th><th>Good</th></tr></thead>
+<tbody>
+<tr><td>
+
+```go
+// sign.go
+var _timeNow = time.Now
+func sign(msg string) string {
+  now := _timeNow()
+  return signWithTime(msg, now)
+}
+```
+
+</td><td>
+
+```go
+// sign.go
+type signer struct {
+  now func() time.Time
+}
+func newSigner() *signer {
+  return &signer{
+    now: time.Now,
+  }
+}
+func (s *signer) Sign(msg string) string {
+  now := s.now()
+  return signWithTime(msg, now)
+}
+```
+</td></tr>
+<tr><td>
+
+```go
+// sign_test.go
+func TestSign(t *testing.T) {
+  oldTimeNow := _timeNow
+  _timeNow = func() time.Time {
+    return someFixedTime
+  }
+  defer func() { _timeNow = oldTimeNow }()
+  assert.Equal(t, want, sign(give))
+}
+```
+
+</td><td>
+
+```go
+// sign_test.go
+func TestSigner(t *testing.T) {
+  s := newSigner()
+  s.now = func() time.Time {
+    return someFixedTime
+  }
+  assert.Equal(t, want, s.Sign(give))
+}
+```
+
+</td></tr>
+</tbody></table>
+
 ## 性能
 
-性能方面的特定准则，适用于热路径。
+性能方面的特定准则只适用于高频场景。
 
 ### 优先使用 strconv 而不是 fmt
 
@@ -1007,15 +1088,15 @@ BenchmarkGood-4  500000000   3.25 ns/op
 
 ### 尽量初始化时指定 Map 容量
 
-在尽可能的情况下,在使用 `make()` 初始化的时候提供容量信息
+在尽可能的情况下，在使用 `make()` 初始化的时候提供容量信息
 
 ```go
 make(map[T1]T2, hint)
 ```
 
-为 `make()` 提供 容量（`hint`） 信息尝试在初始化时调整 map 大小,
-这减少了在将元素添加到 map 时增长 map 和 分配(`allocations`) 的开销
-注意，map 不能保证分配 hint 个容量(`hint`) ,因此，即使提供了容量(`hint`),添加元素任然可以进行分配。 
+为 `make()` 提供容量信息（hint）尝试在初始化时调整 map 大小，
+这减少了在将元素添加到 map 时增长和分配的开销。
+注意，map 不能保证分配 hint 个容量。因此，即使提供了容量，添加元素仍然可以进行分配。 
 
 <table>
 <thead><tr><th>Bad</th><th>Good</th></tr></thead>
@@ -1059,9 +1140,9 @@ for _, f := range files {
 
 ### 一致性
 
-本文中概述的一些标准都是客观性的评估,是根据场景、上下文、或者主观性的判断;
+本文中概述的一些标准都是客观性的评估，是根据场景、上下文、或者主观性的判断；
 
-但是最重要的是, **保持一致**.
+但是最重要的是，**保持一致**.
 
 一致性的代码更容易维护、是更合理的、需要更少的学习成本、并且随着新的约定出现或者出现错误后更容易迁移、更新、修复 bug
 
@@ -1206,12 +1287,12 @@ func f() string {
 </td></tr>
 </tbody></table>
 
-### import 组内的包导入顺序
+### import 分组
 
-应该有两类导入组：
+导入应该分为两组：
 
 - 标准库
-- 其他一切
+- 其他库
 
 默认情况下，这是 goimports 应用的分组。
 
@@ -1477,7 +1558,7 @@ var _e error = F()
 // F 返回一个 myError 类型的实例，但是我们要 error 类型
 ```
 
-### 对于未导出的顶层常量和变量,使用_作为前缀
+### 对于未导出的顶层常量和变量，使用_作为前缀
 
 在未导出的顶级`vars`和`consts`， 前面加上前缀_，以使它们在使用时明确表示它们是全局符号。
 
@@ -1854,7 +1935,7 @@ const (
 func printInfo(name string, region Region, status Status)
 ```
 
-### 使用原始字符串字面值,避免转义
+### 使用原始字符串字面值，避免转义
 
 Go 支持使用 [原始字符串字面值](https://golang.org/ref/spec#raw_string_lit)，也就是 " ` " 来表示原生字符串，在需要转义的场景下，我们应该尽量使用这种方案来替换。
 
@@ -1905,6 +1986,81 @@ sptr := &T{Name: "bar"}
 
 </td></tr>
 </tbody></table>
+
+### 初始化 Maps
+
+对于空 map 请使用 `make(..)` 初始化， 并且 map 是通过编程方式填充的。
+这使得 map 初始化在表现上不同于声明，并且它还可以方便地在 make 后添加大小提示。
+
+<table>
+<thead><tr><th>Bad</th><th>Good</th></tr></thead>
+<tbody>
+<tr><td>
+
+```go
+var (
+  // m1 读写安全;
+  // m2 在写入时会 panic
+  m1 = map[T1]T2{}
+  m2 map[T1]T2
+)
+```
+
+</td><td>
+
+```go
+var (
+  // m1 读写安全;
+  // m2 在写入时会 panic
+  m1 = make(map[T1]T2)
+  m2 map[T1]T2
+)
+```
+
+</td></tr>
+<tr><td>
+
+声明和初始化看起来非常相似的。
+
+</td><td>
+
+声明和初始化看起来差别非常大。
+
+</td></tr>
+</tbody></table>
+
+在尽可能的情况下，请在初始化时提供 map 容量大小，详细请看 [尽量初始化时指定 Map 容量](#尽量初始化时指定-Map-容量)。
+
+
+另外，如果 map 包含固定的元素列表，则使用 map literals(map 初始化列表) 初始化映射。
+
+
+<table>
+<thead><tr><th>Bad</th><th>Good</th></tr></thead>
+<tbody>
+<tr><td>
+
+```go
+m := make(map[T1]T2, 3)
+m[k1] = v1
+m[k2] = v2
+m[k3] = v3
+```
+
+</td><td>
+
+```go
+m := map[T1]T2{
+  k1: v1,
+  k2: v2,
+  k3: v3,
+}
+```
+
+</td></tr>
+</tbody></table>
+
+基本准则是：在初始化时使用 map 初始化列表 来添加一组固定的元素。否则使用 `make` (如果可以，请尽量指定 map 容量)。
 
 ### 字符串 string format
 
@@ -2064,62 +2220,117 @@ for _, tt := range tests {
 ```go
 // package db
 
-func Connect(
+func Open(
   addr string,
-  timeout time.Duration,
-  caching bool,
+  cache bool,
+  logger *zap.Logger
 ) (*Connection, error) {
   // ...
 }
-
-// Timeout and caching must always be provided,
-// even if the user wants to use the default.
-
-db.Connect(addr, db.DefaultTimeout, db.DefaultCaching)
-db.Connect(addr, newTimeout, db.DefaultCaching)
-db.Connect(addr, db.DefaultTimeout, false /* caching */)
-db.Connect(addr, newTimeout, false /* caching */)
 ```
 
 </td><td>
 
 ```go
-type options struct {
-  timeout time.Duration
-  caching bool
+// package db
+
+type Option interface {
+  // ...
 }
 
-// Option overrides behavior of Connect.
+func WithCache(c bool) Option {
+  // ...
+}
+
+func WithLogger(log *zap.Logger) Option {
+  // ...
+}
+
+// Open creates a connection.
+func Open(
+  addr string,
+  opts ...Option,
+) (*Connection, error) {
+  // ...
+}
+```
+
+</td></tr>
+<tr><td>
+
+必须始终提供缓存和记录器参数，即使用户希望使用默认值。
+
+```go
+db.Open(addr, db.DefaultCache, zap.NewNop())
+db.Open(addr, db.DefaultCache, log)
+db.Open(addr, false /* cache */, zap.NewNop())
+db.Open(addr, false /* cache */, log)
+```
+
+</td><td>
+
+只有在需要时才提供选项。
+
+```go
+db.Open(addr)
+db.Open(addr, db.WithLogger(log))
+db.Open(addr, db.WithCache(false))
+db.Open(
+  addr,
+  db.WithCache(false),
+  db.WithLogger(log),
+)
+```
+
+</td></tr>
+</tbody></table>
+
+Our suggested way of implementing this pattern is with an `Option` interface
+that holds an unexported method, recording options on an unexported `options`
+struct.
+
+我们建议实现此模式的方法是使用一个 `Option` 接口，该接口保存一个未导出的方法，在一个未导出的 `options` 结构上记录选项。
+
+```go
+type options struct {
+  cache  bool
+  logger *zap.Logger
+}
+
 type Option interface {
   apply(*options)
 }
 
-type optionFunc func(*options)
+type cacheOption bool
 
-func (f optionFunc) apply(o *options) {
-  f(o)
+func (c cacheOption) apply(opts *options) {
+  opts.cache = bool(c)
 }
 
-func WithTimeout(t time.Duration) Option {
-  return optionFunc(func(o *options) {
-    o.timeout = t
-  })
+func WithCache(c bool) Option {
+  return cacheOption(c)
 }
 
-func WithCaching(cache bool) Option {
-  return optionFunc(func(o *options) {
-    o.caching = cache
-  })
+type loggerOption struct {
+  Log *zap.Logger
 }
 
-// Connect creates a connection.
-func Connect(
+func (l loggerOption) apply(opts *options) {
+  opts.Logger = l.Log
+}
+
+func WithLogger(log *zap.Logger) Option {
+  return loggerOption{Log: log}
+}
+
+// Open creates a connection.
+func Open(
   addr string,
   opts ...Option,
 ) (*Connection, error) {
   options := options{
-    timeout: defaultTimeout,
-    caching: defaultCaching,
+    cache:  defaultCache,
+    logger: zap.NewNop(),
   }
 
   for _, o := range opts {
@@ -2128,21 +2339,9 @@ func Connect(
 
   // ...
 }
-
-// Options must be provided only if needed.
-
-db.Connect(addr)
-db.Connect(addr, db.WithTimeout(newTimeout))
-db.Connect(addr, db.WithCaching(false))
-db.Connect(
-  addr,
-  db.WithCaching(false),
-  db.WithTimeout(newTimeout),
-)
 ```
 
-</td></tr>
-</tbody></table>
+注意: 还有一种使用闭包实现这个模式的方法，但是我们相信上面的模式为作者提供了更多的灵活性，并且更容易对用户进行调试和测试。特别是，在不可能进行比较的情况下它允许在测试和模拟中对选项进行比较。此外，它还允许选项实现其他接口，包括 `fmt.Stringer`，允许用户读取选项的字符串表示形式。
 
 还可以参考下面资料：
 
